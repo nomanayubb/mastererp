@@ -39,3 +39,11 @@ modules:
     features:
       - {slug: subscription, name: Subscription, actions: [view, create, edit, cancel], status: tested, sensitive: true}
       - {slug: invoices, name: Invoices and payments, actions: [view, pay], status: tested, sensitive: true}
+  - slug: config
+    name: Configuration
+    features:
+      - {slug: modules, name: Module activation, actions: [view, edit], status: tested}
+      - {slug: templates, name: Industry templates, actions: [view, apply], status: tested}
+      - {slug: products, name: Software editions, actions: [view, install], status: tested}
+      - {slug: fields, name: Custom fields, actions: [view, create, edit, delete], status: tested}
+      - {slug: terminology, name: Terminology, actions: [view, edit], status: tested}

@@ -4,12 +4,15 @@ import { Alert, Btn, Card, Field, PageHeader, Select, Table, useAction, useLoad 
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-type Company = { id: string; name: string; legal_name?: string | null; country?: string | null; base_currency: string };
+type Company = { id: string; name: string; legal_name?: string | null; country?: string | null; base_currency: string; custom?: Record<string, unknown> };
+type FieldDef = { key: string; label: string; type: string; required: boolean; options: string[] };
 type Branch = { id: string; company_id: string; name: string };
 type Dept = { id: string; company_id: string; branch_id: string | null; parent_id: string | null; name: string };
 
 export default function Organization() {
-  const { can } = useAuth();
+  const { can, term } = useAuth();
+  const defs = useLoad(() => api<FieldDef[]>("/config/fields/for/platform.company"));
+  const [custom, setCustom] = useState<Record<string, unknown>>({});
   const companies = useLoad(() => api<Company[]>("/organizations/companies"));
   const branches = useLoad(() => api<Branch[]>("/organizations/branches"));
   const depts = useLoad(() => api<Dept[]>("/organizations/departments"));
@@ -24,8 +27,8 @@ export default function Organization() {
 
   const addCompany = async (e: FormEvent) => {
     e.preventDefault();
-    const r = await a1.run(() => api("/organizations/companies", { body: { ...co, legal_name: co.legal_name || null, country: co.country || null } }), "Company created");
-    if (r) { setCo({ name: "", legal_name: "", country: "", base_currency: "USD" }); reloadAll(); }
+    const r = await a1.run(() => api("/organizations/companies", { body: { ...co, legal_name: co.legal_name || null, country: co.country || null, custom } }), "Created");
+    if (r) { setCo({ name: "", legal_name: "", country: "", base_currency: "USD" }); setCustom({}); reloadAll(); }
   };
   const addBranch = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,8 +46,9 @@ export default function Organization() {
       <PageHeader title="Organization" subtitle="Companies, branches and departments. You only see what your access scope allows." />
       {companies.error && <Alert>{companies.error}</Alert>}
       <div className="grid gap-6 xl:grid-cols-3">
-        <Card title="Companies">
-          <Table head={["Name", "Country", "Currency"]} rows={(companies.data ?? []).map((c) => [<span key={c.id}>{c.name}{c.legal_name ? <span className="block text-xs text-muted">{c.legal_name}</span> : null}</span>, c.country ?? "—", c.base_currency])} />
+        <Card title={term("companies", "Companies")}>
+          <Table head={["Name", "Country", "Currency"]} rows={(companies.data ?? []).map((c) => [<span key={c.id}>{c.name}{c.legal_name ? <span className="block text-xs text-muted">{c.legal_name}</span> : null}
+            {c.custom && Object.keys(c.custom).length > 0 ? <span className="block text-xs text-muted">{Object.entries(c.custom).map(([k, v]) => `${defs.data?.find((d) => d.key === k)?.label ?? k}: ${String(v)}`).join(" · ")}</span> : null}</span>, c.country ?? "—", c.base_currency])} />
           {can("platform.org.companies", "create") && (
             <form onSubmit={addCompany} className="mt-4 space-y-3 border-t border-line pt-4">
               {a1.error && <Alert>{a1.error}</Alert>}{a1.done && <Alert kind="ok">{a1.done}</Alert>}
@@ -54,12 +58,22 @@ export default function Organization() {
                 <Field label="Country (ISO-2)" maxLength={2} value={co.country} onChange={(e) => setCo({ ...co, country: e.target.value.toUpperCase() })} />
                 <Field label="Currency" maxLength={3} value={co.base_currency} onChange={(e) => setCo({ ...co, base_currency: e.target.value.toUpperCase() })} />
               </div>
-              <Btn type="submit" disabled={a1.busy}>Add company</Btn>
+              {defs.data?.map((d) => d.type === "select" ? (
+                <Select key={d.key} label={d.label + (d.required ? " *" : "")} value={String(custom[d.key] ?? "")} onChange={(e) => setCustom({ ...custom, [d.key]: e.target.value })} required={d.required}>
+                  <option value="">Select…</option>{d.options.map((o) => <option key={o}>{o}</option>)}
+                </Select>
+              ) : d.type === "boolean" ? (
+                <label key={d.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={custom[d.key] === true} onChange={(e) => setCustom({ ...custom, [d.key]: e.target.checked })} /> {d.label}</label>
+              ) : (
+                <Field key={d.key} label={d.label + (d.required ? " *" : "")} type={d.type === "number" ? "number" : d.type === "date" ? "date" : "text"} value={String(custom[d.key] ?? "")}
+                  onChange={(e) => setCustom({ ...custom, [d.key]: d.type === "number" && e.target.value !== "" ? Number(e.target.value) : e.target.value })} required={d.required} />
+              ))}
+              <Btn type="submit" disabled={a1.busy}>Add</Btn>
             </form>
           )}
         </Card>
 
-        <Card title="Branches">
+        <Card title={term("branches", "Branches")}>
           <Table head={["Name", "Company"]} rows={(branches.data ?? []).map((b) => [b.name, cName(b.company_id)])} />
           {can("platform.org.branches", "create") && (
             <form onSubmit={addBranch} className="mt-4 space-y-3 border-t border-line pt-4">
@@ -74,7 +88,7 @@ export default function Organization() {
           )}
         </Card>
 
-        <Card title="Departments">
+        <Card title={term("departments", "Departments")}>
           <Table head={["Name", "Company", "Branch"]} rows={(depts.data ?? []).map((d) => [d.name, cName(d.company_id), bName(d.branch_id)])} />
           {can("platform.org.departments", "create") && (
             <form onSubmit={addDept} className="mt-4 space-y-3 border-t border-line pt-4">

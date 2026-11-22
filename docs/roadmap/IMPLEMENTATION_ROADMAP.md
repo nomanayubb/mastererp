@@ -30,7 +30,7 @@ Principle: **build the selling and governing infrastructure before the software 
 - **Acceptance:** expired subscription blocks protected operations; limit breaches enforced; upgrade changes entitlements without redeploy.
 - **Risks:** payment provider and tax treatment are external decisions that depend on your target market (GAP_ANALYSIS Decision 2).
 
-### M6 — Configuration & assembly engine; internal catalogue (L)
+### M6 — Configuration & assembly engine; internal catalogue (L) — ✅ DONE 2026-11-23 (see PROJECT_STATUS.md)
 - **Features:** industry templates with inheritance + provenance, apply-to-tenant, dependency resolution/incompatibility checks, product (edition) builder with versions, dynamic navigation, configurable forms/fields/dashboards, internal application catalogue + activate/deactivate.
 - **Acceptance:** new industry edition created without touching unrelated app code; two tenants on different templates see different nav; template update leaves tenant data intact.
 

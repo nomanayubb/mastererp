@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError
 from ueos.platform.db import tx
 
 GLOBAL_TABLES = {"users", "staff", "platform_audit_log", "capability_domains", "business_models", "industries",
-                 "applications", "modules", "submodules", "features", "plans", "plan_items"}
+                 "applications", "modules", "submodules", "features", "plans", "plan_items", "industry_templates", "products", "product_versions"}
 
 
 def test_every_tenant_table_has_forced_rls_policy(superuser):

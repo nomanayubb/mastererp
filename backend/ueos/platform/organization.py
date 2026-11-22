@@ -1,14 +1,15 @@
 """Company -> branch -> department tree. Composite FKs (tenant_id, id) make cross-tenant references impossible."""
 
+import json
 from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
-from ueos.platform import audit, limits
+from ueos.platform import assembly, audit, limits
 from ueos.platform.authz import Scope
 from ueos.platform.db import tx
-from ueos.platform.errors import Conflict, Invalid
+from ueos.platform.errors import Conflict, Invalid, NotFound
 
 
 def _insert(tenant_id: UUID, actor: UUID, table: str, entity: str, cols: dict[str, Any]) -> dict[str, Any]:
@@ -39,9 +40,31 @@ def _list(tenant_id: UUID, table: str, scope: Scope | None, cols: dict[str, str 
     return [{k: (str(v) if isinstance(v, UUID) else v) for k, v in r.items() if k != "tenant_id"} for r in rows]
 
 
-def create_company(tenant_id: UUID, actor: UUID, name: str, legal_name: str | None, country: str | None, base_currency: str) -> dict[str, Any]:
-    return _insert(tenant_id, actor, "companies", "company",
-                   {"name": name, "legal_name": legal_name, "country": country, "base_currency": base_currency.upper()})
+def create_company(tenant_id: UUID, actor: UUID, name: str, legal_name: str | None, country: str | None, base_currency: str,
+                   custom: dict[str, Any] | None = None) -> dict[str, Any]:
+    with tx(tenant_id) as c:
+        clean = assembly.validate_custom_values(c, "platform.company", custom or {}, require_all=True)
+    out = _insert(tenant_id, actor, "companies", "company",
+                  {"name": name, "legal_name": legal_name, "country": country, "base_currency": base_currency.upper()})
+    if clean:
+        update_company_custom(tenant_id, actor, UUID(out["id"]), clean, replace=True)
+    out["custom"] = clean
+    return out
+
+
+def update_company_custom(tenant_id: UUID, actor: UUID, company_id: UUID, values: dict[str, Any], replace: bool = False) -> dict[str, Any]:
+    with tx(tenant_id) as c:
+        row = c.execute(text("select custom from platform.companies where id=:i for update"), {"i": company_id}).first()
+        if not row:
+            raise NotFound("company not found")
+        clean = assembly.validate_custom_values(c, "platform.company", values, require_all=False)
+        merged = clean if replace else {**row.custom, **clean}
+        for k, val in values.items():  # explicit null/empty removes a value
+            if val in (None, "") and k in merged:
+                merged.pop(k)
+        c.execute(text("update platform.companies set custom=cast(:v as jsonb) where id=:i"), {"v": json.dumps(merged), "i": company_id})
+        audit.record(c, tenant_id, actor, "company.custom_updated", "company", company_id, {"keys": sorted(values)})
+    return merged
 
 
 def create_branch(tenant_id: UUID, actor: UUID, company_id: UUID, name: str) -> dict[str, Any]:

@@ -3,7 +3,7 @@
 Last updated: 2026-11-23
 
 ## Phase
-Phase 1 — Platform foundation. **M1–M5 and the frontend shell are done.** M6 (industry templates/assembly), M7 (shared services) and Gate G1 are next. See `docs/MASTER_PLAN.md` for goals/backlog/rules and `CLAUDE.md` for how to work.
+Phase 1 — Platform foundation. **M1–M6 and the frontend shell are done.** M7 (shared services) and Gate G1 are next. See `docs/MASTER_PLAN.md` for goals/backlog/rules and `CLAUDE.md` for how to work.
 
 ## Completed milestones
 - **M0** Discovery, reconciliation, architecture/roadmap (`docs/`).
@@ -19,17 +19,29 @@ Phase 1 — Platform foundation. **M1–M5 and the frontend shell are done.** M6
   - Verified live in the browser: subscribe to a paid plan → pending invoice 33.99 (29.00 + 4.99/user) → sandbox pay → active, usage vs limits shown.
 - **Project memory docs**: `CLAUDE.md` (rules for every session), `docs/MASTER_PLAN.md` (goals, backlog, parked ideas, open questions, Odoo policy), `docs/spec/SPEC_DIGEST.md` (requirements digest), ADR-017/018.
 
+- **M6 Configuration & assembly engine** (PRD Phase 5 / Software Builder):
+  - Industry templates: versioned, draft → published (immutable) → deprecated, new versions; **inheritance** (child extends a published parent) with resolution that merges the chain and records **provenance** (which template set each value) and **overrides** (what a child replaced).
+  - Template content: business models, applications, modules, custom fields, terminology, role templates, dashboards, recommended plans, compliance tags, workflow names (stored only — executed in M7).
+  - **Apply to tenant** copies resolved configuration into tenant-owned rows and **never overwrites** anything the tenant already has (re-applying or applying a newer version keeps tenant edits); applied roles cannot exceed the applier's own permissions; everything is audited.
+  - Module activation per tenant with **automatic dependency resolution**, protected deactivation (blocked while another active module needs it) and **conflict prevention** (`conflicts_with` in feature manifests, checked against already-active modules).
+  - **Software editions (products)**: versioned compositions of registry modules + template + branding + recommended plans (no duplication of applications); validate/test (warns when recommended plans do not cover a module's features), publish (immutable), new versions; tenants install an edition (activates modules, applies template, stores branding).
+  - **Dynamic navigation** from published apps + activated modules + entitlements + the user's own permissions (only the actions they hold); module launcher page that states honestly when a module's screens are not built yet.
+  - **Custom fields** (text/number/date/boolean/select, required) enforced server-side on companies; tenant **terminology**; template-driven **dashboard** widgets that never show counts the user may not view.
+  - Staff page "Templates & editions" (JSON template editor, product builder); tenant "Configuration" page (modules, templates with preview, editions, fields, terminology).
+  - Verified live in the browser: applying a Hotel template (inherits a base) renamed "Members" → "Staff", added an Applications section with Finance modules, relabelled Organization to "Properties/Hotels", added the inherited + child custom fields to the company form and created Front-desk dashboard widgets.
+
 ## In-progress
 - None.
 
 ## Pending (Phase 1 remainder)
-- M6 industry templates + assembly + dynamic nav · M7 master data, notifications, documents, workflow engine v1, outbox/inbox · Gate G1.
+- M7 master data, notifications, documents, workflow engine v1, outbox/inbox · Gate G1.
+- M6 gaps: no template un-apply/rollback; custom fields exist only for companies (other entities follow with their apps); no visual form/menu designer yet (config is JSON/fields); workflow templates are stored but not executed until M7; dashboards support only count widgets; product `test` checks plan coverage but there is no automated edition test environment; internal catalogue is per-tenant activation (the third-party developer marketplace is later).
 - Billing gaps: no real payment gateway (decision needed), no tax on invoices, no credit notes/refunds, no dunning emails, no invoice PDF, no metered billing (storage/API usage only recorded), billing run must be scheduled (no scheduler yet — staff button/API only).
 - Frontend gaps: no Playwright suite (type-check + build + manual browser runs only), no password reset/profile page, no staff MFA screen, tokens in localStorage (move to httpOnly cookies before production).
 - Break-glass support access not implemented. Full backlog: `docs/MASTER_PLAN.md` §4.
 
 ## Verification (run 2026-11-22)
-ruff clean · mypy clean (22 files) · import-linter 1 contract kept · **71 backend tests passed** (21 new for billing) · frontend `tsc --noEmit` clean and `next build` succeeds (17 routes). Mutation checks: disabling limit enforcement (3 tests fail) or payment activation (7 fail) is caught.
+ruff clean · mypy clean (23 files) · import-linter 1 contract kept · **86 backend tests passed** (15 new for M6) · frontend `tsc --noEmit` clean and `next build` succeeds (20 routes). Mutation checks: template overwriting tenant terminology (1 test fails), dependency resolution disabled (3 fail), conflict detection disabled (1 fails) are all caught.
 Tests cover: tenant isolation (structural + behavioural), auth/MFA/sessions/invitations, org tree, audit tamper/append-only/concurrency, manifest linter & sync, registry admin API, staff realm separation and role limits, platform audit chain, RBAC denials, custom roles, escalation, scope, masking, expiry, hours window, amount/SoD, entitlements per tenant, suspension, route-policy coverage (every route has a policy; every `Requires()` key/action exists in the registry), migration up/down.
 
 ## Implemented applications / modules / features
@@ -54,8 +66,7 @@ None known. Independent review recommended for: RLS context handling, session/re
 All project files, venv, caches, temp and the dev/test databases live in `D:\OTHER PROJECTS\master erp` (`.venv`, `.cache`, `.tmp`, `.data`).
 
 ## Next development tasks
-1. M6 assembly engine + industry templates + dynamic navigation.
-2. M7 shared services (master data, notifications, documents, outbox/inbox, workflow v1); Gate G1 (stop for user review).
+1. M7 shared services (master data, notifications, documents, outbox/inbox, workflow v1); Gate G1 (stop for user review).
 3. First business-app slice (Finance or Inventory) after its DRD/ERD; Playwright e2e suite.
 
 ## Blocked / needs input

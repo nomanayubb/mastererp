@@ -84,6 +84,12 @@ def lint(manifests: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         for d in f.get("depends_on", []):
             if d not in feats:
                 errs.append(f"{key}: depends_on unknown feature '{d}'")
+    for key, f in feats.items():
+        for d in f.get("conflicts_with", []):
+            if d not in feats:
+                errs.append(f"{key}: conflicts_with unknown feature '{d}'")
+            if d == key:
+                errs.append(f"{key}: cannot conflict with itself")
     # cycle detection (iterative DFS)
     state: dict[str, int] = {}
     for start, first in feats.items():
@@ -157,16 +163,17 @@ def sync_manifests(manifests: list[dict[str, Any]] | None = None) -> dict[str, i
             for mod, sub, f, key in flatten(m):
                 fr = c.execute(
                     text("""insert into platform.features (id, key, application_id, module_id, submodule_id, slug, name, description,
-                              actions, depends_on, sensitive, audited, default_tier, legacy_ref, status, origin)
-                            values (:id, :k, :a, :m, :sm, :s, :n, :d, :act, :dep, :sens, :aud, :tier, :lr, :st, 'code')
+                              actions, depends_on, conflicts_with, sensitive, audited, default_tier, legacy_ref, status, origin)
+                            values (:id, :k, :a, :m, :sm, :s, :n, :d, :act, :dep, :cw, :sens, :aud, :tier, :lr, :st, 'code')
                             on conflict (key) do update set name=excluded.name, description=excluded.description,
-                              actions=excluded.actions, depends_on=excluded.depends_on, sensitive=excluded.sensitive,
+                              actions=excluded.actions, depends_on=excluded.depends_on, conflicts_with=excluded.conflicts_with,
+                              sensitive=excluded.sensitive,
                               audited=excluded.audited, default_tier=excluded.default_tier, legacy_ref=excluded.legacy_ref,
                               status=excluded.status, submodule_id=excluded.submodule_id, module_id=excluded.module_id
                             where platform.features.origin = 'code' returning (xmax = 0) as inserted"""),
                     {"id": uuid4(), "k": key, "a": app_id, "m": mod_ids[mod["slug"]],
                      "sm": sub_ids[(mod["slug"], sub["slug"])] if sub else None, "s": f["slug"], "n": f["name"],
-                     "d": f.get("description", ""), "act": f["actions"], "dep": f.get("depends_on", []),
+                     "d": f.get("description", ""), "act": f["actions"], "dep": f.get("depends_on", []), "cw": f.get("conflicts_with", []),
                      "sens": bool(f.get("sensitive", False)), "aud": bool(f.get("audited", True)),
                      "tier": f.get("default_tier", "standard"), "lr": f.get("legacy_ref"), "st": f.get("status", "specified")},
                 ).first()

@@ -160,6 +160,10 @@ def _entitled(conn: Connection, key: str) -> bool:
     return any(matches(r.feature_key, key) for r in rows)
 
 
+def entitled(conn: Connection, key: str) -> bool:
+    return _entitled(conn, key)
+
+
 def authorize(p: Principal, key: str, action: str, ctx: dict[str, Any] | None = None) -> Authz:
     with tx(p.tenant_id) as c:
         status = c.execute(text("select status from platform.tenants")).scalar()

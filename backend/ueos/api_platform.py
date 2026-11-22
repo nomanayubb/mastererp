@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
-from ueos.platform import audit, billing, registry, staff
+from ueos.platform import assembly, audit, billing, registry, staff
 from ueos.platform.db import tx
 from ueos.platform.errors import AuthError, Forbidden
 from ueos.platform.principal import StaffPrincipal
@@ -145,6 +145,30 @@ class MarkPaidIn(BaseModel):
 
 class BillingRunIn(BaseModel):
     as_of: datetime | None = None  # simulation clock — accepted only in dev/test environments
+
+
+class TemplateIn(BaseModel):
+    industry: str
+    slug: str
+    name: str
+    parent: str | None = None
+    config: dict[str, Any] = {}
+
+
+class ConfigIn(BaseModel):
+    config: dict[str, Any]
+
+
+class ProductIn(BaseModel):
+    slug: str
+    name: str
+    description: str = ""
+    industry: str | None = None
+    business_models: list[str] = []
+
+
+class CompositionIn(BaseModel):
+    composition: dict[str, Any]
 
 
 staff_router = APIRouter(prefix="/api/v1/platform")
@@ -320,3 +344,64 @@ def billing_run(b: BillingRunIn, s: BillingAdmin) -> dict[str, int]:
     with tx(None) as c:
         audit.record_platform(c, s.staff_id, "billing.run", data=rep)
     return rep
+
+
+# ---------------- industry templates & products (assembly)
+@staff_router.get("/templates")
+def tpl_list(s: Any_staff) -> list[dict[str, Any]]:
+    return assembly.list_templates(published_only=False)
+
+
+@staff_router.post("/templates", status_code=201)
+def tpl_create(b: TemplateIn, s: RegAdmin) -> dict[str, Any]:
+    return assembly.create_template(s.staff_id, b.industry, b.slug, b.name, b.parent, b.config)
+
+
+@staff_router.put("/templates/{template_id}/config", status_code=204)
+def tpl_config(template_id: UUID, b: ConfigIn, s: RegAdmin) -> None:
+    assembly.update_template_config(s.staff_id, template_id, b.config)
+
+
+@staff_router.patch("/templates/{template_id}/status", status_code=204)
+def tpl_status(template_id: UUID, b: StatusIn, s: RegAdmin) -> None:
+    assembly.set_template_status(s.staff_id, template_id, b.status)
+
+
+@staff_router.post("/templates/{slug}/versions", status_code=201)
+def tpl_version(slug: str, s: RegAdmin) -> dict[str, Any]:
+    return assembly.new_template_version(s.staff_id, slug)
+
+
+@staff_router.get("/templates/{slug}/resolved")
+def tpl_resolved(slug: str, s: Any_staff) -> dict[str, Any]:
+    return assembly.preview_template(slug, published_only=False)
+
+
+@staff_router.get("/products")
+def prod_list(s: Any_staff) -> list[dict[str, Any]]:
+    return assembly.list_products(published_only=False)
+
+
+@staff_router.post("/products", status_code=201)
+def prod_create(b: ProductIn, s: RegAdmin) -> dict[str, Any]:
+    return assembly.create_product(s.staff_id, b.slug, b.name, b.description, b.industry, b.business_models)
+
+
+@staff_router.put("/products/{slug}/versions/{version}/composition")
+def prod_composition(slug: str, version: int, b: CompositionIn, s: RegAdmin) -> dict[str, Any]:
+    return assembly.set_composition(s.staff_id, slug, version, b.composition)
+
+
+@staff_router.post("/products/{slug}/versions/{version}/test")
+def prod_test(slug: str, version: int, s: Any_staff) -> dict[str, Any]:
+    return assembly.test_composition(slug, version)
+
+
+@staff_router.post("/products/{slug}/versions/{version}/publish", status_code=204)
+def prod_publish(slug: str, version: int, s: RegAdmin) -> None:
+    assembly.publish_version(s.staff_id, slug, version)
+
+
+@staff_router.post("/products/{slug}/versions", status_code=201)
+def prod_new_version(slug: str, s: RegAdmin) -> dict[str, Any]:
+    return assembly.new_product_version(s.staff_id, slug)

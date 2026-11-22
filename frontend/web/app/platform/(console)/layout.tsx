@@ -9,6 +9,7 @@ const NAV = [
   { href: "/platform/tenants", label: "Tenants" },
   { href: "/platform/plans", label: "Plans & billing" },
   { href: "/platform/registry", label: "Registry" },
+  { href: "/platform/assembly", label: "Templates & editions" },
 ];
 
 export default function Console({ children }: { children: ReactNode }) {

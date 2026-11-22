@@ -25,8 +25,8 @@ never hardcode industries/packages/visibility · subscription never replaces sec
 | M3 | Registries + manifest sync | ✅ done |
 | M4 | Authorization (RBAC/ABAC/scope/masking/anti-escalation), staff realm | ✅ done |
 | M5 | Plans, subscriptions, invoices, payments (sandbox), limits, entitlement sync | ✅ done (live payment gateway NOT implemented) |
-| M6 | Industry templates (inheritance + provenance), assembly engine/products, dynamic navigation, configurable forms/fields | ⏳ next |
-| M7 | Shared services: master data (party/product/location/UoM/currency), tax-engine interface, notifications, documents, outbox/inbox events, workflow engine v1 + approvals, reporting v1 | ⏳ |
+| M6 | Industry templates (inheritance + provenance), assembly engine/products, dynamic navigation, configurable fields/terminology/dashboards | ✅ done |
+| M7 | ⏳ next — Shared services: master data (party/product/location/UoM/currency), tax-engine interface, notifications, documents, outbox/inbox events, workflow engine v1 + approvals, reporting v1 | ⏳ |
 | G1 | Foundation validation gate (spec STEP 4 list) — **stop for user review** | ⏳ |
 | A | Core apps: Finance → Inventory → CRM → Sales → Procurement → WMS → HR/Payroll → Projects → Assets | ⏳ (each needs its own feature-level DRD first) |
 | B | Advanced: Manufacturing/MES, Quality, Logistics, Contracts, BI, Treasury, GRC, PLM, SCM | ⏳ |
@@ -34,7 +34,7 @@ never hardcode industries/packages/visibility · subscription never replaces sec
 | D | Industry verticals (healthcare, education, agriculture, …) — demand-driven, regulated ones need expert input | ⏳ |
 
 ## 4. Remaining platform backlog (do these before business apps)
-- **M6**: industry templates + inheritance, tenant apply (copy-on-apply, never overwrite tenant data), dependency resolution / incompatible combos, software "product" (edition) builder with versions, dynamic navigation from entitlements+permissions, configurable forms/fields/dashboards/terminology, internal application catalogue with activate/deactivate.
+- ~~M6~~ ✅ done (see PROJECT_STATUS). Left over from M6: template rollback, visual form/menu designer, more dashboard widget types, custom fields on other entities as their apps arrive.
 - **M7**: master data services; tax-engine interface + jurisdiction pack framework; notification service (email/in-app) — also replaces dev-only invitation-token display; document storage/versioning (S3-compatible); transactional outbox + idempotent inbox; workflow engine v1 (JSON definitions, approvals with separation of duties, delays, escalation); reporting v1; enterprise search (Postgres FTS).
 - **Security/ops hardening**: break-glass support access (ticketed, time-boxed, tenant-visible), rate limiting, password reset, SSO (OIDC/SAML), httpOnly-cookie sessions for the web app, separate DB role for staff/registry writes, grant/entitlement cache, per-tenant time zone for hour constraints, data-residency (`data_region`), dedicated-DB tenants, per-tenant backup/restore tooling, CI pipeline file, Docker/Compose/Helm (needs a non-C: Docker data root), observability (OpenTelemetry).
 - **Billing completion**: real payment gateway adapter (decision needed), tax on invoices, credit notes/refunds, dunning emails, metered usage billing (storage_mb, api_calls), annual-plan proration edge cases, invoice PDF.
@@ -75,7 +75,7 @@ Odoo Community is LGPL-3.0 (copying code carries licence obligations); Odoo Ente
 
 ## 10. Deadline reality check
 The user stated a 3-day window (from 2026-11-22). The full 52-domain catalogue is a multi-year effort (~20k features). Within the window the realistic
-deliverable is: a working, secure, sellable platform foundation (done through M5) + M6/M7 + one business application slice (Finance chart of accounts/journals
+deliverable is: a working, secure, sellable platform foundation (done through M6) + M7 + one business application slice (Finance chart of accounts/journals
 or Inventory ledger) with honest status. Everything else stays in the backlog above.
 
 ## 11. How to resume after a break

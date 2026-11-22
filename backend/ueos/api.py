@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
-from ueos.platform import authz, billing, identity, organization, registry
+from ueos.platform import assembly, authz, billing, identity, organization, registry
 from ueos.platform.authz import Authz
 from ueos.platform.config import get_settings
 from ueos.platform.errors import AuthError, DomainError
@@ -98,6 +98,34 @@ class CompanyIn(BaseModel):
     legal_name: str | None = None
     country: str | None = Field(default=None, max_length=2)
     base_currency: str = Field(default="USD", min_length=3, max_length=3)
+    custom: dict[str, Any] = {}
+
+
+class CompanyPatchIn(BaseModel):
+    custom: dict[str, Any]
+
+
+class ActivateIn(BaseModel):
+    modules: list[str] = Field(min_length=1)
+    with_dependencies: bool = False
+
+
+class DeactivateIn(BaseModel):
+    module: str
+
+
+class FieldIn(BaseModel):
+    entity: str
+    key: str
+    label: str
+    type: str
+    required: bool = False
+    options: list[str] = []
+
+
+class TermIn(BaseModel):
+    term: str
+    label: str
 
 
 class BranchIn(BaseModel):
@@ -222,13 +250,19 @@ def disable(membership_id: UUID, a: _need("platform.users.members", "edit")) -> 
 @v1.post("/organizations/companies", status_code=201)
 def mk_company(b: CompanyIn, a: _need("platform.org.companies", "create")) -> dict[str, Any]:  # type: ignore[valid-type]
     a.require_unrestricted()
-    return organization.create_company(a.p.tenant_id, a.p.user_id, b.name, b.legal_name, b.country, b.base_currency)
+    return organization.create_company(a.p.tenant_id, a.p.user_id, b.name, b.legal_name, b.country, b.base_currency, b.custom)
 
 
 @v1.get("/organizations/companies")
 def ls_companies(a: _need("platform.org.companies", "view")) -> list[dict[str, Any]]:  # type: ignore[valid-type]
     hidden = a.hidden_fields()
     return [{k: v for k, v in r.items() if k not in hidden} for r in organization.list_companies(a.p.tenant_id, a.scope())]
+
+
+@v1.patch("/organizations/companies/{company_id}")
+def patch_company(company_id: UUID, b: CompanyPatchIn, a: _need("platform.org.companies", "edit")) -> dict[str, Any]:  # type: ignore[valid-type]
+    a.require_scope(company_id=company_id)
+    return organization.update_company_custom(a.p.tenant_id, a.p.user_id, company_id, b.custom)
 
 
 @v1.post("/organizations/branches", status_code=201)
@@ -287,6 +321,93 @@ def mk_assignment(b: AssignIn, a: _need("platform.authz.assignments", "create"))
 @v1.delete("/authz/assignments/{assignment_id}", status_code=204)
 def rm_assignment(assignment_id: UUID, a: _need("platform.authz.assignments", "delete")) -> None:  # type: ignore[valid-type]
     authz.unassign_role(a.p, assignment_id)
+
+
+# ---------------- configuration & assembly
+@v1.get("/navigation")
+def navigation(p: Me) -> list[dict[str, Any]]:
+    return assembly.navigation(p)
+
+
+@v1.get("/config/terminology")
+def terminology(p: Me) -> dict[str, str]:
+    return assembly.get_terminology(p.tenant_id)
+
+
+@v1.put("/config/terminology", status_code=204)
+def put_term(b: TermIn, a: _need("platform.config.terminology", "edit")) -> None:  # type: ignore[valid-type]
+    assembly.set_term(a.p, b.term, b.label)
+
+
+@v1.get("/config/dashboard")
+def config_dashboard(p: Me) -> dict[str, Any]:
+    return assembly.dashboard(p)
+
+
+@v1.get("/config/settings")
+def config_settings(p: Me) -> dict[str, Any]:
+    return assembly.settings(p.tenant_id)
+
+
+@v1.get("/config/modules")
+def cfg_modules(a: _need("platform.config.modules", "view")) -> list[dict[str, Any]]:  # type: ignore[valid-type]
+    return assembly.module_catalog(a.p.tenant_id)
+
+
+@v1.post("/config/modules/activate")
+def cfg_activate(b: ActivateIn, a: _need("platform.config.modules", "edit")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return assembly.activate_modules(a.p, b.modules, b.with_dependencies)
+
+
+@v1.post("/config/modules/deactivate", status_code=204)
+def cfg_deactivate(b: DeactivateIn, a: _need("platform.config.modules", "edit")) -> None:  # type: ignore[valid-type]
+    assembly.deactivate_module(a.p, b.module)
+
+
+@v1.get("/config/templates")
+def cfg_templates(a: _need("platform.config.templates", "view")) -> list[dict[str, Any]]:  # type: ignore[valid-type]
+    return assembly.list_templates(published_only=True)
+
+
+@v1.get("/config/templates/{slug}/preview")
+def cfg_template_preview(slug: str, a: _need("platform.config.templates", "view")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return assembly.preview_template(slug)
+
+
+@v1.post("/config/templates/{slug}/apply")
+def cfg_template_apply(slug: str, a: _need("platform.config.templates", "apply")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return assembly.apply_template(a.p, slug)
+
+
+@v1.get("/config/products")
+def cfg_products(a: _need("platform.config.products", "view")) -> list[dict[str, Any]]:  # type: ignore[valid-type]
+    return assembly.list_products(published_only=True)
+
+
+@v1.post("/config/products/{slug}/install")
+def cfg_product_install(slug: str, a: _need("platform.config.products", "install")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return assembly.install_product(a.p, slug)
+
+
+@v1.get("/config/fields")
+def cfg_fields(a: _need("platform.config.fields", "view"), entity: str | None = None) -> list[dict[str, Any]]:  # type: ignore[valid-type]
+    return assembly.list_fields(a.p.tenant_id, entity)
+
+
+@v1.get("/config/fields/for/{entity}")
+def cfg_fields_for(entity: str, p: Me) -> list[dict[str, Any]]:
+    """Field definitions needed to render a form; readable by any member (values stay behind each entity's own permissions)."""
+    return assembly.list_fields(p.tenant_id, entity)
+
+
+@v1.post("/config/fields", status_code=201)
+def cfg_field_create(b: FieldIn, a: _need("platform.config.fields", "create")) -> None:  # type: ignore[valid-type]
+    assembly.create_field(a.p, b.model_dump())
+
+
+@v1.delete("/config/fields/{entity}/{key}", status_code=204)
+def cfg_field_delete(entity: str, key: str, a: _need("platform.config.fields", "delete")) -> None:  # type: ignore[valid-type]
+    assembly.delete_field(a.p, entity, key)
 
 
 # ---------------- audit / catalogue
