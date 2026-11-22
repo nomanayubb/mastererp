@@ -53,9 +53,10 @@ Gate first (never build on red) · isolation + authz + audit on everything · ma
 mutation-check tests · everything on D: · commit/push only when asked · ask before destructive/expensive/regulated steps · no fake payments/mock logic ·
 don't claim compliance · vertical slices over breadth.
 
-## 7. Parked ideas (do NOT start without the user's go-ahead)
-- **"Child" software first** (user idea, 2026-11-22, then paused: "no child software yet"): build small standalone products / reusable kits (e.g. contacts, products, invoicing-lite, stock-lite) on the kernel before the big ERP apps, so the ERP is composed from them. Current plan builds the ERP apps directly as vertical slices on the kernel; revisit when the user decides.
-- Odoo-inspired design reference (see §9).
+## 7. Recorded ideas and decisions (records are never deleted)
+- **"Child" software first — RECORDED, status: NOT NEEDED NOW.** User idea (2026-11-22): before creating the massive ERP, build separate small software as its "child" (small standalone products / reusable kits, e.g. contacts, products, invoicing-lite, stock-lite) so the ERP can be assembled from them more easily. Same day the user paused it ("no child software yet"), and on 2026-11-23 said "we dont need child". **Do not build or propose it now.** The idea stays recorded here (not deleted) in case the user brings it back; the ERP applications are built directly as vertical slices on the platform kernel.
+- **Nothing in the PRD/DRD is removed or descoped.** If the user's PRD/DRD documents specify any child / sub-application, application family, module or submodule, it stays in scope (see `docs/spec/SPEC_DIGEST.md` and `docs/architecture/APPLICATION_REGISTRY.md`). The "no child" decision applies only to the extra seed software Claude proposed, never to requirements the user wrote.
+- Odoo is a design reference only (see §9) — never a dependency.
 
 ## 8. Open questions for the user
 1. Part 3 (CRM) document — supply or approve drafting.

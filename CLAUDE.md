@@ -45,7 +45,7 @@ Sanity-check new tests by **mutation**: temporarily break the guard under test a
 - The user wants speed and has a short deadline (stated 3 days from 2026-11-22). Be efficient, but never skip the gate or fake results. If scope cannot fit, say so plainly and propose the cut.
 - Report outcomes faithfully (failures included). Keep final messages short and plain-language; link files; list what is NOT done.
 - Ask before: destructive operations, expensive infra, new third-party services, real payment/legal/compliance claims, scope changes. Commit/push only when asked (repo: https://github.com/nomanayubb/mastererp, branch `main`; the user authorised pushing there).
-- Do not build "child software" / seed apps until the user says so (see `docs/MASTER_PLAN.md` parked ideas).
+- **"Child"/seed software** (the user's 2026-11-22 idea): recorded in `docs/MASTER_PLAN.md` §7 as *not needed now* — do not build or re-propose it, **and do not delete that record**. Build ERP apps directly as vertical slices on the kernel. **Never remove or descope anything the user's PRD/DRD specifies**, including any child/sub-applications, application families, modules or submodules — those stay in scope. General rule: never delete the user's recorded ideas or requirements; mark their status instead.
 - Compliance wording: the platform *supports* controls; never claim GDPR/SOC 2/PCI/HIPAA status.
 
 ## 7. Odoo and other references
