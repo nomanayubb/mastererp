@@ -1,0 +1,235 @@
+"""Platform-staff API (/api/v1/platform/*). Separate realm: staff tokens are rejected by tenant routes and vice versa."""
+
+from collections.abc import Callable
+from datetime import datetime
+from typing import Annotated, Any
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, EmailStr, Field
+
+from ueos.platform import audit, registry, staff
+from ueos.platform.db import tx
+from ueos.platform.errors import AuthError, Forbidden
+from ueos.platform.principal import StaffPrincipal
+
+bearer = HTTPBearer(auto_error=False, scheme_name="staff")
+
+
+def current_staff(creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> StaffPrincipal:
+    if creds is None:
+        raise AuthError("missing_token")
+    sid, _ = staff.decode(creds.credentials)
+    role = staff.current_role(sid)  # disabling staff takes effect immediately
+    if role is None:
+        raise AuthError("session_revoked")
+    return StaffPrincipal(sid, role)
+
+
+def staff_public() -> None:
+    return None
+
+
+def staff_roles(*roles: str) -> Callable[..., StaffPrincipal]:
+    def dep(s: Annotated[StaffPrincipal, Depends(current_staff)]) -> StaffPrincipal:
+        if s.role not in roles:
+            raise Forbidden(f"requires staff role: {', '.join(roles)}")
+        return s
+
+    dep.__ueos_access__ = "staff"  # type: ignore[attr-defined]
+    return dep
+
+
+staff_public.__ueos_access__ = "public"  # type: ignore[attr-defined]
+current_staff.__ueos_access__ = "staff"  # type: ignore[attr-defined]
+
+REGISTRY_ADMIN = ("super_admin", "registry_admin")
+Any_staff = Annotated[StaffPrincipal, Depends(current_staff)]
+RegAdmin = Annotated[StaffPrincipal, Depends(staff_roles(*REGISTRY_ADMIN))]
+SuperAdmin = Annotated[StaffPrincipal, Depends(staff_roles("super_admin"))]
+
+
+class StaffLogin(BaseModel):
+    email: EmailStr
+    password: str
+    mfa_code: str | None = None
+
+
+class CodeIn(BaseModel):
+    code: str
+
+
+class SimpleIn(BaseModel):
+    slug: str
+    name: str
+    description: str = ""
+
+
+class IndustryIn(SimpleIn):
+    parent_slug: str | None = None
+
+
+class AppIn(SimpleIn):
+    category: str = "general"
+    version: str = "0.1.0"
+    status: str = "draft"
+    capability_slug: str | None = None
+
+
+class ModuleIn(SimpleIn):
+    application_slug: str
+
+
+class SubmoduleIn(SimpleIn):
+    application_slug: str
+    module_slug: str
+
+
+class FeatureIn(SimpleIn):
+    application_slug: str
+    module_slug: str
+    submodule_slug: str | None = None
+    actions: list[str] = Field(min_length=1)
+    depends_on: list[str] = []
+    sensitive: bool = False
+    audited: bool = True
+    default_tier: str = "standard"
+
+
+class StatusIn(BaseModel):
+    status: str
+
+
+class EntitlementIn(BaseModel):
+    feature_key: str
+    expires_at: datetime | None = None
+    limits: dict[str, Any] = {}
+
+
+class TenantStatusIn(BaseModel):
+    status: str
+
+
+staff_router = APIRouter(prefix="/api/v1/platform")
+
+
+@staff_router.post("/auth/login", dependencies=[Depends(staff_public)])
+def staff_login(b: StaffLogin) -> dict[str, Any]:
+    return staff.login(b.email, b.password, b.mfa_code)
+
+
+@staff_router.post("/auth/mfa/enroll")
+def staff_mfa_enroll(s: Any_staff) -> dict[str, str]:
+    return staff.mfa_enroll(s.staff_id)
+
+
+@staff_router.post("/auth/mfa/confirm", status_code=204)
+def staff_mfa_confirm(b: CodeIn, s: Any_staff) -> None:
+    staff.mfa_confirm(s.staff_id, b.code)
+
+
+# ---------------- registry administration
+def _audited(s: StaffPrincipal, action: str, entity: str, ident: str | None, data: dict[str, Any]) -> None:
+    with tx(None) as c:
+        audit.record_platform(c, s.staff_id, action, entity, None, {"id": ident, **data})
+
+
+@staff_router.post("/registry/sync")
+def sync(s: RegAdmin) -> dict[str, int]:
+    rep = registry.sync_manifests()
+    _audited(s, "registry.synced", "registry", None, rep)
+    return rep
+
+
+@staff_router.get("/registry/{kind}")
+def reg_list(kind: str, s: Any_staff) -> list[dict[str, Any]]:
+    return registry.list_kind(kind)
+
+
+@staff_router.post("/registry/capabilities", status_code=201)
+def mk_cap(b: SimpleIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_simple("capability_domains", b.slug, b.name, b.description)
+    _audited(s, "registry.capability_created", "capability", b.slug, {})
+    return r
+
+
+@staff_router.post("/registry/business-models", status_code=201)
+def mk_bm(b: SimpleIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_simple("business_models", b.slug, b.name, b.description)
+    _audited(s, "registry.business_model_created", "business_model", b.slug, {})
+    return r
+
+
+@staff_router.post("/registry/industries", status_code=201)
+def mk_industry(b: IndustryIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_industry(b.slug, b.name, b.description, b.parent_slug)
+    _audited(s, "registry.industry_created", "industry", b.slug, {"parent": b.parent_slug})
+    return r
+
+
+@staff_router.post("/registry/applications", status_code=201)
+def mk_app(b: AppIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_application(b.slug, b.name, b.description, b.category, b.version, b.status, b.capability_slug)
+    _audited(s, "registry.application_created", "application", b.slug, {})
+    return r
+
+
+@staff_router.post("/registry/modules", status_code=201)
+def mk_module(b: ModuleIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_module(b.application_slug, b.slug, b.name, b.description)
+    _audited(s, "registry.module_created", "module", f"{b.application_slug}.{b.slug}", {})
+    return r
+
+
+@staff_router.post("/registry/submodules", status_code=201)
+def mk_submodule(b: SubmoduleIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_submodule(b.application_slug, b.module_slug, b.slug, b.name, b.description)
+    _audited(s, "registry.submodule_created", "submodule", f"{b.application_slug}.{b.module_slug}.{b.slug}", {})
+    return r
+
+
+@staff_router.post("/registry/features", status_code=201)
+def mk_feature(b: FeatureIn, s: RegAdmin) -> dict[str, Any]:
+    r = registry.create_feature(b.application_slug, b.module_slug, b.submodule_slug, b.slug, b.name, b.description,
+                                b.actions, b.depends_on, b.sensitive, b.audited, b.default_tier)
+    _audited(s, "registry.feature_created", "feature", r["key"], {})
+    return r
+
+
+@staff_router.patch("/registry/{kind}/{ident}", status_code=204)
+def reg_status(kind: str, ident: str, b: StatusIn, s: RegAdmin) -> None:
+    registry.set_status(kind, ident, b.status)
+    _audited(s, "registry.status_changed", kind, ident, {"status": b.status})
+
+
+# ---------------- tenants (metadata only — no business data)
+@staff_router.get("/tenants")
+def tenants(s: Any_staff) -> list[dict[str, Any]]:
+    return staff.list_tenants()
+
+
+@staff_router.post("/tenants/{tenant_id}/status", status_code=204)
+def tenant_status(tenant_id: UUID, b: TenantStatusIn, s: SuperAdmin) -> None:
+    staff.set_tenant_status(s.staff_id, tenant_id, b.status)
+
+
+@staff_router.get("/tenants/{tenant_id}/entitlements")
+def ent_list(tenant_id: UUID, s: Any_staff) -> list[dict[str, Any]]:
+    return staff.list_entitlements(tenant_id)
+
+
+@staff_router.post("/tenants/{tenant_id}/entitlements", status_code=204)
+def ent_grant(tenant_id: UUID, b: EntitlementIn, s: SuperAdmin) -> None:
+    staff.grant_entitlement(s.staff_id, tenant_id, b.feature_key, b.expires_at, b.limits)
+
+
+@staff_router.delete("/tenants/{tenant_id}/entitlements", status_code=204)
+def ent_revoke(tenant_id: UUID, feature_key: str, s: SuperAdmin) -> None:
+    staff.revoke_entitlement(s.staff_id, tenant_id, feature_key)
+
+
+@staff_router.get("/audit/verify")
+def platform_audit_verify(s: Any_staff) -> dict[str, Any]:
+    with tx(None) as c:
+        return audit.verify_platform(c)

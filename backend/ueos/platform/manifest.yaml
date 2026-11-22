@@ -1,0 +1,36 @@
+# Platform kernel features. Keys are app.module[.submodule].feature; every API route guarded by Requires() must use a key declared here.
+application:
+  slug: platform
+  name: UEOS Platform
+  category: platform
+  version: 0.2.0
+  description: Identity, tenancy, organization, authorization and registry services shared by all applications.
+modules:
+  - slug: tenant
+    name: Tenant
+    features:
+      - {slug: settings, name: Tenant settings, actions: [view, edit], status: tested}
+  - slug: users
+    name: Users
+    features:
+      - {slug: members, name: Members, actions: [view, edit], status: tested, sensitive: true}
+      - {slug: invitations, name: Invitations, actions: [view, create], status: tested}
+  - slug: org
+    name: Organization
+    features:
+      - {slug: companies, name: Companies, actions: [view, create, edit], status: tested}
+      - {slug: branches, name: Branches, actions: [view, create, edit], status: tested}
+      - {slug: departments, name: Departments, actions: [view, create, edit], status: tested}
+  - slug: authz
+    name: Access control
+    features:
+      - {slug: roles, name: Roles and permissions, actions: [view, create, edit, delete, manage_permissions], status: tested, sensitive: true}
+      - {slug: assignments, name: Role assignments, actions: [view, create, delete], status: tested, sensitive: true}
+  - slug: audit
+    name: Audit
+    features:
+      - {slug: log, name: Audit log, actions: [view, export], status: tested, sensitive: true}
+  - slug: registry
+    name: Registry
+    features:
+      - {slug: catalog, name: Application catalogue, actions: [view], status: tested}

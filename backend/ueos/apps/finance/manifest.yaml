@@ -1,0 +1,28 @@
+# Finance & Accounting (UEOS-FIN-001). PARTIAL manifest: only a representative slice of the 630 specified features is
+# registered so far, all with status "specified" (no implementation yet). legacy_ref = feature number in the DRD.
+application:
+  slug: finance
+  name: Finance & Accounting
+  category: finance
+  version: 0.0.1
+  legacy_ref: UEOS-FIN-001
+  description: General ledger, receivables, payables, banking, budgets, fixed assets, tax and reporting.
+modules:
+  - slug: chart_of_accounts
+    name: Chart of Accounts
+    features:
+      - {slug: accounts, name: Accounts, actions: [view, create, edit, archive], legacy_ref: "53"}
+  - slug: general_ledger
+    name: General Ledger
+    submodules:
+      - slug: journals
+        name: Journals
+        features:
+          - {slug: entries, name: Journal entries, actions: [view, create, edit, submit], legacy_ref: "101", depends_on: [finance.chart_of_accounts.accounts]}
+          - {slug: approval, name: Journal approval, actions: [approve, reject], legacy_ref: "113", sensitive: true, depends_on: [finance.general_ledger.journals.entries]}
+          - {slug: posting, name: Journal posting, actions: [post], legacy_ref: "119", sensitive: true, depends_on: [finance.general_ledger.journals.approval]}
+          - {slug: reversal, name: Journal reversal, actions: [reverse], legacy_ref: "120", sensitive: true, depends_on: [finance.general_ledger.journals.posting]}
+  - slug: accounts_receivable
+    name: Accounts Receivable
+    features:
+      - {slug: invoices, name: Customer invoices, actions: [view, create, edit, approve, post, cancel], legacy_ref: "139", sensitive: true, depends_on: [finance.chart_of_accounts.accounts]}
