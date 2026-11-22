@@ -4,28 +4,28 @@ Principle: **build the selling and governing infrastructure before the software 
 
 ## Phase 1 — Platform foundation (Wave P)
 
-### M1 — Scaffold & quality harness (M)
+### M1 — Scaffold & quality harness (M) — ✅ DONE
 - **Features:** monorepo, Docker Compose (postgres/redis/minio), FastAPI skeleton, Alembic, CI, import-linter, mypy, pytest with real Postgres, OpenTelemetry/logging, `Requires()` route-coverage test.
 - **DB:** `platform` schema, migration framework, RLS helper functions.
 - **Tests / acceptance:** CI green; a sample tenant-owned table passes the isolation suite; migration up/down verified.
 - **Risks:** RLS + async pool context leakage → covered by dedicated test (connection reuse across tenants).
 
-### M2 — Identity, tenancy, organization, audit (L)
+### M2 — Identity, tenancy, organization, audit (L) — ✅ DONE
 - **Features:** tenant registration, user/membership, Argon2id, MFA (TOTP), sessions/refresh rotation, invitations, company/branch/department tree, audit hash chain, platform-staff realm.
 - **APIs:** `/auth`, `/users`, `/tenants`, `/organizations`.
 - **Frontend:** sign-up/login, tenant workspace shell, org management.
 - **Depends:** M1. **Acceptance:** a customer registers, creates an organization, invites a user; cross-tenant access fails on every path; audit chain verifies.
 - **Risks:** security-critical — independent review before M3.
 
-### M3 — Registries & manifests (M)
+### M3 — Registries & manifests (M) — ✅ DONE
 - **Features:** capability/application/module/submodule/feature registries, industry & business-model registries, manifest loader + linter (duplicate slugs, dependency cycles), admin CRUD for config-defined items.
 - **Acceptance:** administrator creates an app, module, submodule, feature, industry; manifest sync idempotent.
 
-### M4 — Authorization engine (L)
+### M4 — Authorization engine (L) — ✅ DONE
 - **Features:** roles/permissions generated from registry, RBAC, ABAC policies (scope, thresholds, hours, SoD, delegation, time-limited), record-scope compiler, field masking, "effective permissions" view, break-glass support access.
 - **Acceptance:** cashier example from master PRD §10.5 passes; permission-matrix tests generated from manifests; every route covered by `Requires()`.
 
-### M5 — Subscription & entitlement engine (L)
+### M5 — Subscription & entitlement engine (L) — ✅ DONE 2026-11-23 (see PROJECT_STATUS.md)
 - **Features:** plans/items (app, module, feature, limits, metered), subscriptions lifecycle (trial, renew, upgrade/downgrade, grace), entitlement materialization + cache, usage metering, invoices/billing events, payment-provider adapter (**test mode only**), enforcement dependency.
 - **Acceptance:** expired subscription blocks protected operations; limit breaches enforced; upgrade changes entitlements without redeploy.
 - **Risks:** payment provider and tax treatment are external decisions that depend on your target market (GAP_ANALYSIS Decision 2).

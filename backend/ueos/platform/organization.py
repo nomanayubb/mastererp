@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import text
 
-from ueos.platform import audit
+from ueos.platform import audit, limits
 from ueos.platform.authz import Scope
 from ueos.platform.db import tx
 from ueos.platform.errors import Conflict, Invalid
@@ -16,6 +16,8 @@ def _insert(tenant_id: UUID, actor: UUID, table: str, entity: str, cols: dict[st
     names = ["id", "tenant_id", *cols]
     sql = f"insert into platform.{table} ({','.join(names)}) values ({','.join(':' + n for n in names)})"
     with tx(tenant_id) as c:
+        if table in ("companies", "branches"):
+            limits.enforce(c, table, 1)
         try:
             with c.begin_nested():
                 c.execute(text(sql), {"id": eid, "tenant_id": tenant_id, **cols})

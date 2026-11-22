@@ -21,7 +21,7 @@ from ueos.platform.security import (
 )
 
 STAFF_AUD = "ueos-platform"
-STAFF_ROLES = ("super_admin", "registry_admin", "support_admin")
+STAFF_ROLES = ("super_admin", "registry_admin", "support_admin", "subscription_admin")
 
 
 def create_staff(email: str, password: str, role: str, display_name: str = "") -> UUID:
@@ -133,7 +133,7 @@ def grant_entitlement(actor: UUID, tenant_id: UUID, feature_key: str, expires_at
             raise Invalid("tenant not found")
         registry.validate_permission(c, feature_key, "*")
         c.execute(text("insert into platform.entitlements (id,tenant_id,feature_key,expires_at,limits) values (:i,:t,:k,:e,cast(:l as jsonb))"
-                       " on conflict (tenant_id, feature_key) do update set expires_at=excluded.expires_at, limits=excluded.limits"),
+                       " on conflict (tenant_id, feature_key, source) do update set expires_at=excluded.expires_at, limits=excluded.limits"),
                   {"i": uuid4(), "t": tenant_id, "k": feature_key, "e": expires_at, "l": __import__("json").dumps(limits)})
         audit.record_platform(c, actor, "entitlement.granted", "tenant", tenant_id, {"feature": feature_key})
         audit.record(c, tenant_id, None, "entitlement.granted_by_platform", data={"feature": feature_key})
@@ -141,7 +141,7 @@ def grant_entitlement(actor: UUID, tenant_id: UUID, feature_key: str, expires_at
 
 def revoke_entitlement(actor: UUID, tenant_id: UUID, feature_key: str) -> None:
     with tx(tenant_id) as c:
-        c.execute(text("delete from platform.entitlements where feature_key=:k"), {"k": feature_key})
+        c.execute(text("delete from platform.entitlements where feature_key=:k and source='manual'"), {"k": feature_key})
         audit.record_platform(c, actor, "entitlement.revoked", "tenant", tenant_id, {"feature": feature_key})
         audit.record(c, tenant_id, None, "entitlement.revoked_by_platform", data={"feature": feature_key})
 
@@ -149,4 +149,4 @@ def revoke_entitlement(actor: UUID, tenant_id: UUID, feature_key: str) -> None:
 def list_entitlements(tenant_id: UUID) -> list[dict[str, Any]]:
     with tx(tenant_id) as c:
         return [{**r, "id": str(r["id"]), "tenant_id": str(r["tenant_id"])} for r in
-                c.execute(text("select * from platform.entitlements order by feature_key")).mappings().all()]
+                c.execute(text("select * from platform.entitlements order by feature_key, source")).mappings().all()]

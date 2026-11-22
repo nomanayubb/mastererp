@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Connection, text
 
-from ueos.platform import audit, authz
+from ueos.platform import audit, authz, billing, limits
 from ueos.platform.config import get_settings
 from ueos.platform.db import tx
 from ueos.platform.errors import AuthError, Conflict, Invalid, NotFound
@@ -68,6 +68,7 @@ def register_tenant(*, tenant_name: str, slug: str, email: str, password: str, d
                   {"i": mid, "t": tid, "u": uid})
         authz.seed_system_roles(c, tid)
         authz.assign_base_role(c, tid, mid, "owner", uid)
+        billing.subscribe_default(c, tid)
         audit.record(c, tid, uid, "tenant.registered", "tenant", tid, {"slug": slug})
         return _issue(c, tid, uid, mid, "owner", ua)
 
@@ -181,6 +182,7 @@ def create_invitation(tenant_id: UUID, inviter: UUID, email: str, role: str) -> 
     token = new_secret()
     iid = uuid4()
     with tx(tenant_id) as c:
+        limits.enforce(c, "users", 1)
         c.execute(text("insert into platform.invitations (id, tenant_id, email, role, token_hash, invited_by, expires_at)"
                        " values (:i,:t,:e,:r,:h,:b, now() + interval '7 days')"),
                   {"i": iid, "t": tenant_id, "e": email, "r": role, "h": sha256(token), "b": inviter})

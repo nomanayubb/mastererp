@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -9,7 +10,7 @@ from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
-from ueos.platform import audit, registry, staff
+from ueos.platform import audit, billing, registry, staff
 from ueos.platform.db import tx
 from ueos.platform.errors import AuthError, Forbidden
 from ueos.platform.principal import StaffPrincipal
@@ -48,6 +49,7 @@ REGISTRY_ADMIN = ("super_admin", "registry_admin")
 Any_staff = Annotated[StaffPrincipal, Depends(current_staff)]
 RegAdmin = Annotated[StaffPrincipal, Depends(staff_roles(*REGISTRY_ADMIN))]
 SuperAdmin = Annotated[StaffPrincipal, Depends(staff_roles("super_admin"))]
+BillingAdmin = Annotated[StaffPrincipal, Depends(staff_roles("super_admin", "subscription_admin"))]
 
 
 class StaffLogin(BaseModel):
@@ -109,6 +111,40 @@ class EntitlementIn(BaseModel):
 
 class TenantStatusIn(BaseModel):
     status: str
+
+
+class PlanIn(BaseModel):
+    slug: str
+    name: str
+    description: str = ""
+    kind: str = "base"
+    billing_period: str = "monthly"
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    base_price: Decimal = Field(default=Decimal(0), ge=0, max_digits=12, decimal_places=2)
+    per_user_price: Decimal = Field(default=Decimal(0), ge=0, max_digits=12, decimal_places=2)
+    trial_days: int = Field(default=0, ge=0, le=365)
+    is_default: bool = False
+    is_public: bool = True
+    features: list[str] = []
+    limits: dict[str, int | None] = {}
+
+
+class PlanItemsIn(BaseModel):
+    features: list[str] = []
+    limits: dict[str, int | None] = {}
+
+
+class AssignPlanIn(BaseModel):
+    plan: str
+    comped: bool = False
+
+
+class MarkPaidIn(BaseModel):
+    reference: str = Field(min_length=1, max_length=80)
+
+
+class BillingRunIn(BaseModel):
+    as_of: datetime | None = None  # simulation clock — accepted only in dev/test environments
 
 
 staff_router = APIRouter(prefix="/api/v1/platform")
@@ -233,3 +269,54 @@ def ent_revoke(tenant_id: UUID, feature_key: str, s: SuperAdmin) -> None:
 def platform_audit_verify(s: Any_staff) -> dict[str, Any]:
     with tx(None) as c:
         return audit.verify_platform(c)
+
+
+# ---------------- plans & billing
+@staff_router.get("/plans")
+def plans(s: Any_staff) -> list[dict[str, Any]]:
+    return billing.list_plans(public_only=False)
+
+
+@staff_router.post("/plans", status_code=201)
+def mk_plan(b: PlanIn, s: BillingAdmin) -> dict[str, Any]:
+    return billing.create_plan(s.staff_id, b.model_dump())
+
+
+@staff_router.put("/plans/{plan_id}/items", status_code=204)
+def plan_items(plan_id: UUID, b: PlanItemsIn, s: BillingAdmin) -> None:
+    billing.replace_plan_items(s.staff_id, plan_id, b.features, b.limits)
+
+
+@staff_router.patch("/plans/{plan_id}/status", status_code=204)
+def plan_status(plan_id: UUID, b: StatusIn, s: BillingAdmin) -> None:
+    billing.set_plan_status(s.staff_id, plan_id, b.status)
+
+
+@staff_router.get("/subscriptions")
+def all_subscriptions(s: Any_staff) -> list[dict[str, Any]]:
+    return billing.list_all_subscriptions()
+
+
+@staff_router.post("/tenants/{tenant_id}/subscriptions", status_code=201)
+def assign_plan(tenant_id: UUID, b: AssignPlanIn, s: BillingAdmin) -> dict[str, Any]:
+    return billing.staff_assign(s.staff_id, tenant_id, b.plan, b.comped)
+
+
+@staff_router.post("/tenants/{tenant_id}/invoices/{invoice_id}/mark-paid")
+def mark_paid(tenant_id: UUID, invoice_id: UUID, b: MarkPaidIn, s: BillingAdmin) -> dict[str, Any]:
+    r = billing.pay_invoice(tenant_id, invoice_id, None, b.reference, provider="manual")
+    with tx(tenant_id) as c:
+        audit.record_platform(c, s.staff_id, "invoice.marked_paid", "invoice", invoice_id, {"reference": b.reference})
+    return r
+
+
+@staff_router.post("/billing/run")
+def billing_run(b: BillingRunIn, s: BillingAdmin) -> dict[str, int]:
+    from ueos.platform.config import get_settings
+
+    if b.as_of and get_settings().env not in ("dev", "test"):
+        raise Forbidden("as_of is only available in dev/test environments")
+    rep = billing.run_billing(b.as_of)
+    with tx(None) as c:
+        audit.record_platform(c, s.staff_id, "billing.run", data=rep)
+    return rep

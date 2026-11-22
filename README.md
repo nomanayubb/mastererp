@@ -1,6 +1,6 @@
 # UEOS — Universal Enterprise Operating System
 
-Status: Phase 1 (platform foundation) — M1 + M2 backend implemented and tested. See `PROJECT_STATUS.md`.
+Status: Phase 1 (platform foundation) — M1–M5 + frontend shell implemented and tested. See `PROJECT_STATUS.md`.
 
 ## Run (everything stays inside this folder)
 ```powershell
@@ -18,6 +18,9 @@ First-time setup (already done): `python -m venv .venv` then `.venv\Scripts\pip 
 ## Documents
 | Document | Purpose |
 |---|---|
+| `CLAUDE.md` | Rules and start-of-session checklist (loaded automatically by Claude Code) |
+| `docs/MASTER_PLAN.md` | Goals, milestone table, full backlog, parked ideas, open questions |
+| `docs/spec/SPEC_DIGEST.md` | Digest of the original PRD/DRD requirements |
 | `docs/architecture/GAP_ANALYSIS.md` | Reconciliation of the specs, gaps, decisions needed |
 | `docs/architecture/MASTER_ARCHITECTURE.md` | Stack, tenancy, authz, events, audit, ERD |
 | `docs/architecture/APPLICATION_REGISTRY.md` | 52 domains reconciled to ~43, waves, dependency graph |

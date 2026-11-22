@@ -34,3 +34,8 @@ modules:
     name: Registry
     features:
       - {slug: catalog, name: Application catalogue, actions: [view], status: tested}
+  - slug: billing
+    name: Billing
+    features:
+      - {slug: subscription, name: Subscription, actions: [view, create, edit, cancel], status: tested, sensitive: true}
+      - {slug: invoices, name: Invoices and payments, actions: [view, pay], status: tested, sensitive: true}

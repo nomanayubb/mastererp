@@ -11,6 +11,7 @@ const NAV: { href: string; label: string; feature?: string; action?: string }[] 
   { href: "/members", label: "Members", feature: "platform.users.members", action: "view" },
   { href: "/roles", label: "Roles & access", feature: "platform.authz.roles", action: "view" },
   { href: "/audit", label: "Audit log", feature: "platform.audit.log", action: "view" },
+  { href: "/billing", label: "Billing", feature: "platform.billing.subscription", action: "view" },
   { href: "/catalog", label: "Applications", feature: "platform.registry.catalog", action: "view" },
   { href: "/security", label: "Security" },
 ];

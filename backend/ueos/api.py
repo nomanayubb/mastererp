@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
-from ueos.platform import authz, identity, organization, registry
+from ueos.platform import authz, billing, identity, organization, registry
 from ueos.platform.authz import Authz
 from ueos.platform.config import get_settings
 from ueos.platform.errors import AuthError, DomainError
@@ -133,6 +133,18 @@ class AssignIn(BaseModel):
     role_id: UUID
     scope: dict[str, list[UUID]] = {}
     expires_at: datetime | None = None
+
+
+class SubscribeIn(BaseModel):
+    plan: str
+
+
+class ChangePlanIn(BaseModel):
+    plan: str
+
+
+class PayIn(BaseModel):
+    payment_method: str = "test_ok"
 
 
 v1 = APIRouter(prefix="/api/v1")
@@ -293,11 +305,56 @@ def catalog(a: _need("platform.registry.catalog", "view")) -> list[dict[str, Any
     return registry.catalog()
 
 
+# ---------------- billing (tenant side)
+@v1.get("/billing/plans")
+def billing_plans(a: _need("platform.billing.subscription", "view")) -> list[dict[str, Any]]:  # type: ignore[valid-type]
+    return billing.list_plans(public_only=True)
+
+
+@v1.get("/billing/overview")
+def billing_overview(a: _need("platform.billing.subscription", "view")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return billing.overview(a.p.tenant_id)
+
+
+@v1.post("/billing/subscriptions", status_code=201)
+def billing_subscribe(b: SubscribeIn, a: _need("platform.billing.subscription", "create")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return billing.subscribe(a.p.tenant_id, a.p.user_id, b.plan)
+
+
+@v1.post("/billing/subscriptions/{sub_id}/change-plan")
+def billing_change(sub_id: UUID, b: ChangePlanIn, a: _need("platform.billing.subscription", "edit")) -> dict[str, Any]:  # type: ignore[valid-type]
+    return billing.change_plan(a.p.tenant_id, a.p.user_id, sub_id, b.plan)
+
+
+@v1.post("/billing/subscriptions/{sub_id}/cancel", status_code=204)
+def billing_cancel(sub_id: UUID, a: _need("platform.billing.subscription", "cancel")) -> None:  # type: ignore[valid-type]
+    billing.cancel(a.p.tenant_id, a.p.user_id, sub_id)
+
+
+@v1.post("/billing/subscriptions/{sub_id}/resume", status_code=204)
+def billing_resume(sub_id: UUID, a: _need("platform.billing.subscription", "edit")) -> None:  # type: ignore[valid-type]
+    billing.resume(a.p.tenant_id, a.p.user_id, sub_id)
+
+
+@v1.post("/billing/invoices/{invoice_id}/pay")
+def billing_pay(invoice_id: UUID, b: PayIn, a: _need("platform.billing.invoices", "pay"),  # type: ignore[valid-type]
+                idempotency_key: Annotated[str | None, Header(alias="idempotency-key")] = None) -> dict[str, Any]:
+    try:
+        return billing.pay_invoice(a.p.tenant_id, invoice_id, a.p.user_id, b.payment_method, idempotency_key=idempotency_key)
+    except NotImplementedError as e:
+        raise DomainError(str(e)) from e
+
+
 def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def _domain(_: Request, e: DomainError) -> JSONResponse:
         return JSONResponse({"type": e.code, "title": e.code, "status": e.status, "detail": e.detail},
                             status_code=e.status, media_type="application/problem+json")
+
+    @app.exception_handler(NotImplementedError)
+    async def _not_impl(_: Request, e: NotImplementedError) -> JSONResponse:
+        return JSONResponse({"type": "not_implemented", "title": "not_implemented", "status": 501, "detail": str(e)},
+                            status_code=501, media_type="application/problem+json")
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, e: RequestValidationError) -> JSONResponse:

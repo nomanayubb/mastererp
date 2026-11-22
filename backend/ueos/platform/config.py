@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     max_failed_logins: int = 5
     lockout_minutes: int = 15
     min_password_length: int = 12
+    grace_days: int = 7  # days of continued access after a renewal invoice is issued unpaid
+    payment_provider: str = "test"  # 'test' (sandbox, dev/test only) | 'stripe' (not implemented yet)
 
     def validate_for_runtime(self) -> None:
         if self.env != "dev" and self.jwt_secret.startswith("dev-only"):

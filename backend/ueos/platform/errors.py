@@ -30,3 +30,13 @@ class Conflict(DomainError):
 class Invalid(DomainError):
     status = 422
     code = "invalid"
+
+
+class LimitExceeded(DomainError):
+    status = 403
+    code = "limit_exceeded"
+
+
+class PaymentFailed(DomainError):
+    status = 402
+    code = "payment_failed"
